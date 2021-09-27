@@ -1,0 +1,149 @@
+Create and Manage Cloud Resources: Challenge Lab:
+
+-----------------Topics tested----------------------------------------:
+--Create an instance.
+--Create a 3 node Kubernetes cluster and run a simple service.
+--Create an HTTP(s) Load Balancer in front of two web servers.
+
+----------------------------Setup-------------------------------------:
+Before you click the Start Lab button
+Read these instructions. Labs are timed and you cannot pause them. The timer, which starts when you click Start Lab, shows how long Google Cloud resources will be made available to you.
+
+This Qwiklabs hands-on lab lets you do the lab activities yourself in a real cloud environment, not in a simulation or demo environment. It does so by giving you new, temporary credentials that you use to sign in and access Google Cloud for the duration of the lab.
+
+------------------Challenge scenario----------------------------------:
+You have started a new role as a Junior Cloud Engineer for Jooli Inc. You are expected to help manage the infrastructure at Jooli. Common tasks include provisioning resources for projects.
+
+You are expected to have the skills and knowledge for these tasks, so don’t expect step-by-step guides to be provided.
+
+-Create all resources in the default region or zone, unless otherwise directed.
+-Naming is normally team-resource, e.g. an instance could be named nucleus-webserver1
+-Allocate cost effective resource sizes. Projects are monitored and excessive resource use will result in the containing project’s termination (and possibly yours), so beware. This is the guidance the monitoring team is willing to share; unless directed use f1-micro for small Linux VMs and n1-standard-1 for Windows or other applications such as Kubernetes nodes.
+
+---------------Task 1: Create a project jumphost instance-------------:
+Make sure you:
+-name the instance nucleus-jumphost
+-use the machine type f1-micro
+-use the default image type (Debian Linux)
+-In the Cloud Console, on the top left of the screen, select Navigation menu > Compute Engine > VM Instances:
+
+--Name for the VM instance : nucleus-jumphost
+--Region : leave Default Region
+--Zone : leave Default Zone
+--Machine Type : f1-micro (Series – N1)
+--Boot Disk : use the default image type (Debian Linux)Create.
+--------------------|Click Check my progress to verify the objective.Task Completed…|----------------------------------------
+
+--------Task 2: Create a Kubernetes service cluster------------------:
+The team is building an application that will use a service. This service will run on Kubernetes.
+You need to:
+
+-Create a cluster (in the us-east1 region) to host the service
+-Use the Docker container hello-app (gcr.io/google-samples/hello-app:2.0) as a place holder, the team will replace the container with their own work later
+-Expose the app on port 8080
+--Activate Cloud Shell--
+****then run following commands check where command is working or not incase get any error follow steps properly****
+
+1. gcloud config set compute/zone us-east1-b
+
+2. gcloud container clusters create nucleus-webserver1
+
+3. gcloud container clusters get-credentials nucleus-webserver1
+
+4. kubectl create deployment hello-app --image=gcr.io/google-samples/hello-app:2.0
+
+5. kubectl expose deployment hello-app --type=LoadBalancer --port 8080
+
+6. kubectl get service
+
+--------------------|Click Check my progress to verify the objective.Task Completed…|--------------------------------------
+
+
+-------------------Task 3: Setup an HTTP load balancer------------------------:
+We will serve the site via nginx web servers, but we want to ensure we have a fault tolerant environment, so please create an HTTP load balancer with a managed instance group of two nginx web servers. Use the following to configure the web servers, the team will replace this with their own configuration later.
+
+You need to:
+-Create an instance template
+-Create a target pool
+-Create a managed instance group
+-Create a firewall rule to allow traffic (80/tcp)
+-Create a health check
+-Create a backend service and attach the manged instance group
+-Create a URL map and target HTTP proxy to route requests to your URL map
+-Create a forwarding rule
+-Do the following commands in cloud shell to Setup an HTTP load balancer
+
+1.Create startup.sh file as following command
+
+cat << EOF > startup.sh
+#! /bin/bash
+apt-get update
+apt-get install -y nginx
+service nginx start
+sed -i -- 's/nginx/Google Cloud Platform - '"\$HOSTNAME"'/' /var/www/html/index.nginx-debian.html
+EOF
+
+2.Create an instance template :
+
+gcloud compute instance-templates create web-server-template \
+--metadata-from-file startup-script=startup.sh \
+--network nucleus-vpc \
+--machine-type g1-small \
+--region us-east1
+
+3.Create a managed instance group :
+
+gcloud compute instance-groups managed create web-server-group \
+--base-instance-name web-server \
+--size 2 \
+--template web-server-template \
+--region us-east1
+
+4.Create a firewall rule to allow traffic (80/tcp) :
+
+gcloud compute firewall-rules create web-server-firewall \
+--allow tcp:80 \
+--network nucleus-vpc
+
+gcloud compute forwarding-rules list
+
+5.Create a health check :
+
+gcloud compute http-health-checks create http-basic-check
+
+6.Create a backend service and attach the manged instance group :
+
+gcloud compute instance-groups managed \
+set-named-ports web-server-group \
+--named-ports http:80 \
+--region us-east1
+
+7.Create a backend service and attach the manged instance group :
+
+gcloud compute backend-services create web-server-backend \
+--protocol HTTP \
+--http-health-checks http-basic-check \
+--global
+
+8.Create a URL map and target HTTP proxy to route requests to your URL map :
+
+gcloud compute backend-services add-backend web-server-backend \
+--instance-group web-server-group \
+--instance-group-region us-east1 \
+--global
+gcloud compute url-maps create web-server-map \
+--default-service web-server-backend
+
+gcloud compute target-http-proxies create http-lb-proxy \
+--url-map web-server-map
+
+9.Create a forwarding rule :
+
+gcloud compute forwarding-rules create http-content-rule \
+--global \
+--target-http-proxy http-lb-proxy \
+--ports 80
+
+gcloud compute forwarding-rules list
+
+****************wait for 5minutes checking the task it will automatically reflected ***********************
